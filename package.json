@@ -10,7 +10,7 @@
         "format": "prettier . --write"
     },
     "dependencies": {
-        "@auth0/auth0-vue": "github:auth0/auth0-vue",
+        "@auth0/auth0-vue": "^1.0.0-beta.1",
         "@headlessui/vue": "^1.5.0",
         "@vueuse/core": "^7.6.2",
         "feather-icons": "^4.28.0",
