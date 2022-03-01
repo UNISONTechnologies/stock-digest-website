@@ -50,10 +50,20 @@ export const useDatabase = () => {
         );
 
         if (dbUsers.length === 0) {
-            return null;
+            await createUser(userId);
+            return { id: userId, timeperiod: "today", symbols: [] };
         } else {
             return dbUsers[0];
         }
+    };
+
+    const createUser = async (userId: string): Promise<void> => {
+        await harperRequest({
+            operation: "insert",
+            schema: import.meta.env.VITE_HARPERDB_SCHEMA as string,
+            table: import.meta.env.VITE_HARPERDB_TABLE as string,
+            records: [{ id: userId, timeperiod: "today", symbols: [] }],
+        });
     };
 
     const updateUserDetails = async (dbUser: DatabaseUser): Promise<void> => {
