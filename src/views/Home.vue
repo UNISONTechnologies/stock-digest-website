@@ -106,7 +106,18 @@ const getNextWorkDay = (date: Date) => {
     return date;
 };
 
-let nextDigestDate = ref<Date>(getNextWorkDay(new Date()));
+const getNextDigestDate = (): Date => {
+    const d = new Date();
+    const day = d.getDay();
+
+    if (day !== 0 && day !== 6) {
+        return d;
+    } else {
+        return getNextWorkDay(d);
+    }
+};
+
+let nextDigestDate = ref<Date>(getNextDigestDate());
 const timer = nextDigestDate.value
     ? useTimer(nextDigestDate.value.setUTCHours(21, 15, 0), true)
     : null;
@@ -119,7 +130,7 @@ onBeforeMount(
 
 watchEffect(async () => {
     if (timer && timer.isExpired.value) {
-        nextDigestDate.value = getNextWorkDay(new Date());
+        nextDigestDate.value = getNextDigestDate();
         if (nextDigestDate.value) {
             timer.restart(nextDigestDate.value.setUTCHours(21, 15, 0), true);
         }
@@ -359,13 +370,28 @@ watchEffect(async () => {
                             <time
                                 :datetime="`P${timer.days.value}DT${timer.hours.value}H${timer.minutes.value}M${timer.seconds.value}S`"
                             >
-                                {{ timer.days }} day{{
-                                    timer.days.value !== 1 ? "s" : ""
-                                }}, {{ timer.hours }} hour{{
-                                    timer.hours.value !== 1 ? "s" : ""
-                                }}, {{ timer.minutes }} minute{{
-                                    timer.minutes.value !== 1 ? "s" : ""
-                                }}
+                                <span v-if="timer.days.value > 0"
+                                    >{{ timer.days }} day{{
+                                        timer.days.value !== 1 ? "s" : ""
+                                    }}{{
+                                        timer.minutes.value !== 0 ||
+                                        timer.hours.value !== 0
+                                            ? ","
+                                            : ""
+                                    }}</span
+                                >
+                                <span v-if="timer.hours.value > 0"
+                                    >{{ timer.hours }} hour{{
+                                        timer.hours.value !== 1 ? "s" : ""
+                                    }}{{
+                                        timer.minutes.value !== 0 ? "," : ""
+                                    }}</span
+                                >
+                                <span v-if="timer.minutes.value > 0">
+                                    {{ timer.minutes }} minute{{
+                                        timer.minutes.value !== 1 ? "s" : ""
+                                    }}
+                                </span>
                             </time>
                         </p>
                     </div>
