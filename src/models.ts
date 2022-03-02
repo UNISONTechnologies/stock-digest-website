@@ -17,9 +17,10 @@ export type HarperDatabaseUser = DatabaseUser & {
 };
 
 export type HarperRequest = {
-    operation: "insert" | "update" | "sql";
+    operation: "insert" | "update" | "delete" | "sql";
     sql?: string;
     schema?: string;
     table?: string;
     records?: DatabaseUser[];
+    hash_values?: string[];
 };

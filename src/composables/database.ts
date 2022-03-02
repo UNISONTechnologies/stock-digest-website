@@ -57,23 +57,29 @@ export const useDatabase = () => {
         }
     };
 
-    const createUser = async (userId: string): Promise<void> => {
+    const createUser = async (userId: string): Promise<void> =>
         await harperRequest({
             operation: "insert",
             schema: import.meta.env.VITE_HARPERDB_SCHEMA as string,
             table: import.meta.env.VITE_HARPERDB_TABLE as string,
             records: [{ id: userId, timeperiod: "today", symbols: [] }],
         });
-    };
 
-    const updateUserDetails = async (dbUser: DatabaseUser): Promise<void> => {
+    const updateUserDetails = async (dbUser: DatabaseUser): Promise<void> =>
         await harperRequest({
             operation: "update",
             schema: import.meta.env.VITE_HARPERDB_SCHEMA as string,
             table: import.meta.env.VITE_HARPERDB_TABLE as string,
             records: [dbUser],
         });
-    };
 
-    return { getUserDetails, updateUserDetails };
+    const deleteUser = async (userId: string): Promise<void> =>
+        await harperRequest({
+            operation: "delete",
+            schema: import.meta.env.VITE_HARPERDB_SCHEMA as string,
+            table: import.meta.env.VITE_HARPERDB_TABLE as string,
+            hash_values: [userId],
+        });
+
+    return { getUserDetails, updateUserDetails, deleteUser };
 };

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /* eslint-disable vue/no-v-html */
 
-import { onBeforeMount, ref } from "vue";
+import { onBeforeMount, ref, watchEffect } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth0 } from "@auth0/auth0-vue";
 import { useTitle, useToggle } from "@vueuse/core";
 import { isDark } from "../composables/dark";
 import { useDatabase } from "../composables/database";
+import { useTimer } from "vue-timer-hook";
 import feather from "feather-icons";
 import type { DatabaseUser } from "../models";
 
@@ -57,8 +58,19 @@ const resetPassword = async () => {
     resetPasswordNotification.value = true;
 };
 
-const { getUserDetails, updateUserDetails } = useDatabase();
+const {
+    getUserDetails,
+    updateUserDetails,
+    deleteUser: dbDeleteUser,
+} = useDatabase();
 const userDetails = ref<DatabaseUser | null>(null);
+const deleteUser = async (userId: string) => {
+    await dbDeleteUser(userId);
+
+    if (user.value) {
+        userDetails.value = await getUserDetails(user.value.sub as string);
+    }
+};
 
 const editSymbolsDialog = ref<boolean>(false);
 const newSymbol = ref<string>("");
@@ -72,15 +84,47 @@ const removeSymbol = async (index: number) =>
     userDetails.value.symbols.splice(index, 1) &&
     (await updateUserDetails(userDetails.value));
 
+const digestDeletionConfirmationDialog = ref<boolean>(false);
+
 const smallerIcon = (icon: string, newSize = 16) =>
     icon.replace(
         'width="24" height="24"',
         `width="${newSize}" height="${newSize}"`,
     );
 
+const getNextWorkDay = (date: Date) => {
+    let day = date.getDay();
+    let add = 1;
+
+    if (day === 5) {
+        add = 3;
+    } else if (day === 6) {
+        add = 2;
+    }
+
+    date.setDate(date.getDate() + add);
+    return date;
+};
+
+let nextDigestDate = ref<Date>(getNextWorkDay(new Date()));
+const timer = nextDigestDate.value
+    ? useTimer(nextDigestDate.value.setUTCHours(21, 15, 0), true)
+    : null;
+
 onBeforeMount(
-    async () => user.value && (userDetails.value = await getUserDetails(user.value.sub as string)),
+    async () =>
+        user.value &&
+        (userDetails.value = await getUserDetails(user.value.sub as string)),
 );
+
+watchEffect(async () => {
+    if (timer && timer.isExpired.value) {
+        nextDigestDate.value = getNextWorkDay(new Date());
+        if (nextDigestDate.value) {
+            timer.restart(nextDigestDate.value.setUTCHours(21, 15, 0), true);
+        }
+    }
+});
 </script>
 
 <template>
@@ -111,7 +155,7 @@ onBeforeMount(
             </div>
         </header>
 
-        <main class="mt-15 sm:mt-5 space-y-8">
+        <main class="mt-4 space-y-8">
             <div v-if="user" class="space-y-4">
                 <h3 class="text-gray-800 dark:text-gray-200 flex items-center">
                     <span class="flex-1 text-xl font-semibold">
@@ -215,7 +259,7 @@ onBeforeMount(
                 </button>
             </div>
 
-            <div v-if="userDetails" class="space-y-4">
+            <div v-if="user && userDetails" class="space-y-4">
                 <h3 class="text-gray-800 dark:text-gray-200 flex items-center">
                     <span class="flex-1 text-xl font-semibold">
                         Stock Digest Settings
@@ -284,6 +328,58 @@ onBeforeMount(
                         />
                     </div>
                 </div>
+
+                <div
+                    v-if="nextDigestDate && timer"
+                    class="bg-gray-100 dark:bg-gray-900 rounded-lg p-5"
+                >
+                    <div
+                        class="text-gray-600 dark:text-gray-500 text-sm mb-0.5"
+                    >
+                        Next Digest
+                    </div>
+
+                    <div class="text-black dark:text-white">
+                        <p>
+                            <time
+                                :datetime="nextDigestDate.toISOString()"
+                                v-text="
+                                    new Date(nextDigestDate).toLocaleString(
+                                        undefined,
+                                        {
+                                            dateStyle: 'full',
+                                            timeStyle: 'short',
+                                        },
+                                    )
+                                "
+                            />
+                        </p>
+
+                        <p>
+                            <time
+                                :datetime="`P${timer.days.value}DT${timer.hours.value}H${timer.minutes.value}M${timer.seconds.value}S`"
+                            >
+                                {{ timer.days }} day{{
+                                    timer.days.value !== 1 ? "s" : ""
+                                }}, {{ timer.hours }} hour{{
+                                    timer.hours.value !== 1 ? "s" : ""
+                                }}, {{ timer.minutes }} minute{{
+                                    timer.minutes.value !== 1 ? "s" : ""
+                                }}
+                            </time>
+                        </p>
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="w-full text-left bg-gray-100 dark:bg-gray-900 rounded-lg p-5"
+                    @click="digestDeletionConfirmationDialog = true"
+                >
+                    <span class="text-black dark:text-white">
+                        Delete Stock Digest Data
+                    </span>
+                </button>
             </div>
         </main>
 
@@ -538,6 +634,99 @@ onBeforeMount(
                                             "
                                         />
                                     </div>
+                                </div>
+                            </div>
+                        </TransitionChild>
+                    </div>
+                </div>
+            </Dialog>
+        </TransitionRoot>
+
+        <TransitionRoot
+            v-if="user && userDetails"
+            appear
+            :show="digestDeletionConfirmationDialog"
+            as="template"
+        >
+            <Dialog as="div" @close="digestDeletionConfirmationDialog = false">
+                <div
+                    class="fixed inset-0 z-10 overflow-y-auto bg-black bg-opacity-60"
+                >
+                    <div class="min-h-screen px-4 text-center">
+                        <TransitionChild
+                            as="template"
+                            enter="duration-300 ease-out"
+                            enter-from="opacity-0"
+                            enter-to="opacity-100"
+                            leave="duration-200 ease-in"
+                            leave-from="opacity-100"
+                            leave-to="opacity-0"
+                        >
+                            <DialogOverlay class="fixed inset-0" />
+                        </TransitionChild>
+
+                        <span
+                            class="inline-block h-screen align-middle"
+                            aria-hidden="true"
+                        >
+                            &#8203;
+                        </span>
+
+                        <TransitionChild
+                            as="template"
+                            enter="duration-300 ease-out"
+                            enter-from="opacity-0 scale-95"
+                            enter-to="opacity-100 scale-100"
+                            leave="duration-200 ease-in"
+                            leave-from="opacity-100 scale-100"
+                            leave-to="opacity-0 scale-95"
+                        >
+                            <div
+                                class="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-900 shadow-xl rounded-lg"
+                            >
+                                <DialogTitle
+                                    as="h3"
+                                    class="text-xl font-medium leading-6 text-gray-900 dark:text-gray-100"
+                                >
+                                    Delete Stock Digest Data
+                                </DialogTitle>
+                                <div
+                                    class="my-4 space-y-2 text-gray-500 dark:text-gray-400 text-sm"
+                                >
+                                    <p>
+                                        Are you sure you want to delete your
+                                        Stock Digest data? This action is
+                                        irreversible.
+                                    </p>
+                                    <p>
+                                        If you want to sign up again for Stock
+                                        Digest in the future, you must re-create
+                                        your Stock Digest data.
+                                    </p>
+                                </div>
+                                <div
+                                    class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse"
+                                >
+                                    <button
+                                        type="button"
+                                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                                        @click="
+                                            digestDeletionConfirmationDialog = false;
+                                            deleteUser(user.sub as string);
+                                        "
+                                    >
+                                        Delete
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
+                                        @click="
+                                            digestDeletionConfirmationDialog = false
+                                        "
+                                    >
+                                        Cancel
+                                    </button>
                                 </div>
                             </div>
                         </TransitionChild>
